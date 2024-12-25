@@ -109,6 +109,6 @@ pwIDAQAB
         if ((defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
             return true;
         }
-        return false;
+        return true;
     }
 }

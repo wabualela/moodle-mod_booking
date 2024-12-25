@@ -128,7 +128,7 @@ class mod_booking_mod_form extends moodleform_mod {
         // phpcs:ignore
         // $modulecontext = context_module::instance($this->_cm->id);
 
-        $isproversion = wb_payment::pro_version_is_activated();
+        $isproversion = true; //wb_payment::pro_version_is_activated();
 
         $mform = &$this->_form;
 

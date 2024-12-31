@@ -176,6 +176,9 @@ class bookingoption_description implements renderable, templatable {
     /** @var string $canceluntil */
     private $canceluntil = null;
 
+    /** @var bool $selflearningcourseshowdurationinfo */
+    private $selflearningcourseshowdurationinfo = null;
+
     /**
      * Constructor.
      *
@@ -264,15 +267,21 @@ class bookingoption_description implements renderable, templatable {
         // Check if it's a self-learning course. There's a JSON flag for this.
         if (!empty($settings->selflearningcourse)) {
             $this->selflearningcourse = true;
-            // Format the duration correctly.
-            $this->duration = format_time($settings->duration);
 
-            $ba = singleton_service::get_instance_of_booking_answers($settings);
-            $buyforuser = price::return_user_to_buy_for();
-            if (isset($ba->usersonlist[$buyforuser->id])) {
-                $timebooked = $ba->usersonlist[$buyforuser->id]->timecreated;
-                $timeremainingsec = $timebooked + $settings->duration - time();
-                $this->timeremaining = format_time($timeremainingsec);
+            if (!empty($settings->duration)) {
+                // We do not show duration info if it is set to 0.
+                $this->selflearningcourseshowdurationinfo = true;
+
+                // Format the duration correctly.
+                $this->duration = format_time($settings->duration);
+
+                $ba = singleton_service::get_instance_of_booking_answers($settings);
+                $buyforuser = price::return_user_to_buy_for();
+                if (isset($ba->usersonlist[$buyforuser->id])) {
+                    $timebooked = $ba->usersonlist[$buyforuser->id]->timecreated;
+                    $timeremainingsec = $timebooked + $settings->duration - time();
+                    $this->timeremaining = format_time($timeremainingsec);
+                }
             }
         }
 
@@ -363,17 +372,18 @@ class bookingoption_description implements renderable, templatable {
 
         // Every date will be an array of datestring and customfields.
         // But customfields will only be shown if we show booking option information inline.
-
-        $this->dates = $bookingoption->return_array_of_sessions(
-            $bookingevent,
-            $descriptionparam,
-            $withcustomfields,
-            $forbookeduser,
-            $ashtml
-        );
-
-        if (!empty($this->dates)) {
-            $this->datesexist = true;
+        // Make sure, that optiondates (sessions) are not stored for self-learning courses.
+        if (empty($settings->selflearningcourse)) {
+            $this->dates = $bookingoption->return_array_of_sessions(
+                $bookingevent,
+                $descriptionparam,
+                $withcustomfields,
+                $forbookeduser,
+                $ashtml
+            );
+            if (!empty($this->dates)) {
+                $this->datesexist = true;
+            }
         }
 
         $colteacher = new col_teacher($optionid, $settings);
@@ -570,6 +580,7 @@ class bookingoption_description implements renderable, templatable {
             'address' => $this->address,
             'institution' => $this->institution,
             'selflearningcourse' => $this->selflearningcourse,
+            'selflearningcourseshowdurationinfo' => $this->selflearningcourseshowdurationinfo,
             'duration' => $this->duration,
             'dates' => $this->dates,
             'datesexist' => $this->datesexist,

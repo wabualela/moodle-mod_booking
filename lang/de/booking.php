@@ -269,6 +269,7 @@ $string['bocondiscancelledfullavailable'] = 'Buchen möglich';
 $string['bocondiscancelledfullnotavailable'] = 'Storniert';
 $string['bocondiscancellednotavailable'] = 'Storniert';
 $string['bocondisloggedin'] = 'isloggedin: User ist eingeloggt';
+$string['bocondisloggedinnotavailable'] = 'Log-In um zu buchen';
 $string['bocondisloggedinprice'] = 'isloggedinprice: Zeige alle Preise wenn nicht eingelogged.';
 $string['bocondmaxnumberofbookings'] = 'max_number_of_bookings: Maximum an Nutzer:innen erreicht, die dieser User buchen darf';
 $string['bocondmaxnumberofbookingsavailable'] = 'Buchen';
@@ -599,6 +600,7 @@ $string['campaignname_help'] = 'Geben Sie einen beliebigen Namen für die Kampag
 $string['campaignstart'] = 'Beginn der Kampagne';
 $string['campaignstart_help'] = 'Wann soll die Kampagne starten?';
 $string['campaigntype'] = 'Kampagnentyp';
+$string['cancancelbookabsolute'] = 'Stornodatum mit fixem Datum setzen';
 $string['cancancelbookallow'] = 'Teilnehmer:innen dürfen Buchungen selbst stornieren';
 $string['cancancelbookdays'] = 'Nutzer:innen können nur bis n Tage vor Kursstart stornieren. Negative Werte meinen n Tage NACH Kursstart.';
 $string['cancancelbookdays:bookingclosingtime'] = 'Nutzer:innen können nur bis n Tage vor <b>Anmeldeschluss (Buchungsende)</b> stornieren. Negative Werte meinen n Tage NACH Anmeldeschluss.';
@@ -606,6 +608,9 @@ $string['cancancelbookdays:bookingopeningtime'] = 'Nutzer:innen können nur bis 
 $string['cancancelbookdays:semesterstart'] = 'Nutzer:innen können nur bis n Tage vor <b>Semesterbeginn</b> stornieren. Negative Werte meinen n Tage NACH Semesterbeginn.';
 $string['cancancelbookdaysno'] = 'Kein Limit';
 $string['cancancelbookrelative'] = 'Stornodatum <b>relativ zu {$a}</b> setzen';
+$string['cancancelbooksetting'] = 'Stornobedingen definieren';
+$string['cancancelbooksetting_help'] = 'Diese Einstellungen können durch die Einstellugnen in den einzelnen Buchungsoptionen überschrieben werden.';
+$string['cancancelbookunlimited'] = 'Stornieren ohne limit möglich.';
 $string['cancel'] = 'Abbrechen';
 $string['cancelallusers'] = 'Alle gebuchten Teilnehmer:innen stornieren';
 $string['cancelbooking'] = 'Buchung stornieren';
@@ -914,7 +919,7 @@ $string['deleteholiday'] = 'Eintrag löschen';
 $string['deleteinfoscheckboxadmin'] = 'Die vom User angegebenen Daten löschen, nachdem die Option beendet wurde.';
 $string['deleteinfoscheckboxadminwarning'] = '<div class="alert alert-warning style="margin-left: 200px;">
 <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-<span>Für die Ausführung muss eine entsprechende <a target="_blank" href="{$a}">Buchung Regel</a> aktiviert werden</span></div>';
+<span>Für die Ausführung muss eine entsprechende <a target="_blank" href="{$a}">Buchungsregel (Booking Rule)</a> aktiviert werden</span></div>';
 $string['deleteoptiondate'] = 'Termin entfernen';
 $string['deleterule'] = 'Löschen';
 $string['deletesemester'] = 'Semester löschen';
@@ -1124,6 +1129,9 @@ $string['extendlimitforoverbooked'] = 'Überbuchte Personen zusätzlich zu Fakto
 $string['extendlimitforoverbooked_help'] = 'Wählen Sie diese Option, passiert folgendes:
     Ein Kurs hat ein Limit von 40. Er ist aber bereits mit 2 TN auf 42 TN überbucht.
     Wird auf diesen Kurs eine Limiterhöhung um beispielsweise 10% angewandt, wird das Limit auf 46 erhöht (40 + 4 (10%) + 2 (bereits überbuchte)), statt auf 44 (40+4).';
+$string['fallbackonlywhenempty'] = 'Fallback nur, wenn entsprechendes Nutzerprofilfeld leer ist';
+$string['fallbackonlywhennotmatching'] = 'Fallback nur, wenn nicht übereinstimmend (auch wenn Feld leer ist)';
+$string['fallbackturnedoff'] = 'Fallback deaktiviert';
 $string['feedbackurl'] = 'Link zur Umfrage';
 $string['feedbackurl_help'] = 'Link zu einem Feedback-Formular, das an Teilnehmer:innen gesendet werden soll.
  Verwenden Sie in E-Mails den Platzhalter <b>{pollurl}</b>.';
@@ -1409,7 +1417,16 @@ $string['mobilefieldrequired'] = 'Dieses Feld ist erforderlich';
 $string['mobilenotification'] = 'Formular wurde eingereicht';
 $string['mobileresetsubmission'] = 'Einreichungsformular zurücksetzen';
 $string['mobilesetsubmission'] = 'Einreichen';
+$string['mobilesettings'] = 'Einstellungen für die Moodle App';
+$string['mobilesettings_desc'] = 'Hier können Sie besondere Eintellungen für die Moodle Mobile App treffen.';
+$string['mobilesubmission'] = 'Mobile Einreichung';
+$string['mobilesubmissiondisabled'] = 'Mobile Einreichung ist deaktiviert';
+$string['mobilesubmissionenabled'] = 'Mobile Einreichung ist aktiviert';
+$string['mobilesubmissionform'] = 'Mobile Einreichungsformular';
+$string['mobilesubmissionform_desc'] = 'Einschalten oder Ausschalten der mobilen Einreichungsformulare';
 $string['mobilesubmittedsuccess'] = 'Sie können fortfahren und den Kurs buchen';
+$string['mobileviewoptionsdesc'] = 'Auswahl der möglichen Ansichten in der Mobilen-Ansicht';
+$string['mobileviewoptionstext'] = 'Mobile Ansichten';
 $string['mod/booking:bookanyone'] = 'JedeN buchen';
 $string['mod/booking:expertoptionform'] = 'Buchungsoption für ExpertInnen';
 $string['mod/booking:reducedoptionform1'] = 'Buchungsoption reduziert 1';
@@ -1472,6 +1489,12 @@ $string['nolabels'] = 'Keine Spaltennamen definiert.';
 $string['nolocationselected'] = 'Kein Ort ausgewählt';
 $string['nomoodlecourseconnection'] = 'Keine Verbindung zu Moodle-Kurs';
 $string['nooptionselected'] = 'Keine Buchungsoption ausgewählt';
+$string['nooverlapblocking'] = 'Diese Option kann nicht gebucht werden, sie überlappt der/den von Ihnen gebuchten Option(en): {$a}';
+$string['nooverlappingselectblocking'] = 'Buchen blockieren';
+$string['nooverlappingselectinfo'] = 'Wenn diese Buchungsoption ausgewählt wird, obwohl die Zeiträume mit einer anderen überlappt, was soll passieren?';
+$string['nooverlappingselectwarning'] = 'Warnung anzeigen';
+$string['nooverlappingsettingcheckbox'] = 'Reagiere auf den Versuch überlappende Buchungsoptionen zu buchen';
+$string['nooverlapwarning'] = 'Achtung, diese Option überlappt mit der/den von Ihnen gebuchten Option(en): {$a}';
 $string['nopermissiontoaccesscontent'] = '<div class="alert alert-danger" role="alert">Sie sind nicht berechtigt, auf diese Inhalte zuzugreifen.</div>';
 $string['nopermissiontoaccesspage'] = '<div class="alert alert-danger" role="alert">Sie sind nicht berechtigt, auf diese Seite zuzugreifen.</div>';
 $string['nopricecategoriesyet'] = 'Es wurden noch keine Preiskategorien angelegt.';
@@ -1526,7 +1549,6 @@ $string['notifyme'] = 'Benachrichtigen wenn frei';
 $string['notinarray'] = 'TeilnehmerIn hat keinen dieser Werte (Komma getrennt)';
 $string['notopenyet'] = 'Diese Aktivität ist bis {$a} nicht verfügbar';
 $string['nouserfound'] = 'Kein/e User/in gefunden: ';
-$string['nousers'] = 'Keine Nutzer:innen!';
 $string['numberofinstallment'] = 'Anzahl Ratenzahlung';
 $string['numberofinstallmentstring'] = '{$a}. Ratenzahlung';
 $string['numberparticipants'] = "Max buchbar";
@@ -1982,6 +2004,7 @@ $string['showlistoncoursepage_help'] = 'Wenn Sie diese Einstellung aktivieren, w
 $string['showmessages'] = 'Zeige Nachrichten';
 $string['showmybookingsonly'] = 'Meine Buchungen';
 $string['showmyfieldofstudyonly'] = "Mein Studiengang";
+$string['showpriceifnotloggedin'] = 'Preis(e) anzeigen, wenn Nutzer:innen nicht eingeloggt sind';
 $string['showprogressbars'] = 'Fortschrittsbalken für bereits vergangene Zeit anzeigen';
 $string['showrecentupdates'] = 'Zeige die letzten Bearbeitungen';
 $string['showsubbookings'] = 'Zusatzbuchungen aktivieren';

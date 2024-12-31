@@ -59,6 +59,9 @@ class col_coursestarttime implements renderable, templatable {
     /** @var string $timeremaining */
     public $timeremaining = null;
 
+    /** @var bool $selflearningcourseshowdurationinfo */
+    private $selflearningcourseshowdurationinfo = null;
+
     /**
      * Constructor
      *
@@ -77,28 +80,37 @@ class col_coursestarttime implements renderable, templatable {
         }
 
         $settings = singleton_service::get_instance_of_booking_option_settings($optionid);
-
-        if (!empty($settings->selflearningcourse)) {
-            $ba = singleton_service::get_instance_of_booking_answers($settings);
-            $buyforuser = price::return_user_to_buy_for();
-            if (isset($ba->usersonlist[$buyforuser->id])) {
-                $timebooked = $ba->usersonlist[$buyforuser->id]->timecreated;
-                $timeremainingsec = $timebooked + $settings->duration - time();
-                $this->timeremaining = format_time($timeremainingsec);
-            }
-
-            $this->selflearningcourse = true;
-            $this->duration = format_time($settings->duration);
-        }
-
         $this->optionid = $optionid;
-        $this->datestrings = dates_handler::return_array_of_sessions_simple($optionid);
 
-        $maxdates = get_config('booking', 'collapseshowsettings') ?? 2; // Hardcoded fallback on two.
+        // For self-learning courses, we do not show any optiondates (sessions).
+        if (!empty($settings->selflearningcourse)) {
+            $this->selflearningcourse = true;
 
-        // Show a collapse button for the dates.
-        if (!empty($this->datestrings) && count($this->datestrings) > $maxdates && $collapsed == true) {
-            $this->showcollapsebtn = true;
+            if (!empty($settings->duration)) {
+                // We do not show duration info if it is set to 0.
+                $this->selflearningcourseshowdurationinfo = true;
+
+                // Format the duration correctly.
+                $this->duration = format_time($settings->duration);
+
+                $ba = singleton_service::get_instance_of_booking_answers($settings);
+                $buyforuser = price::return_user_to_buy_for();
+                if (isset($ba->usersonlist[$buyforuser->id])) {
+                    $timebooked = $ba->usersonlist[$buyforuser->id]->timecreated;
+                    $timeremainingsec = $timebooked + $settings->duration - time();
+                    $this->timeremaining = format_time($timeremainingsec);
+                }
+            }
+        } else {
+            // No self-learning course.
+            $this->datestrings = dates_handler::return_array_of_sessions_simple($optionid);
+
+            $maxdates = get_config('booking', 'collapseshowsettings') ?? 2; // Hardcoded fallback on two.
+
+            // Show a collapse button for the dates.
+            if (!empty($this->datestrings) && count($this->datestrings) > $maxdates && $collapsed == true) {
+                $this->showcollapsebtn = true;
+            }
         }
     }
 
@@ -112,17 +124,18 @@ class col_coursestarttime implements renderable, templatable {
      */
     public function export_for_template(renderer_base $output) {
 
-        if (!$this->datestrings) {
-            if (!empty($this->selflearningcourse)) {
-                $returnarr['selflearningcourse'] = $this->selflearningcourse;
-                $returnarr['duration'] = $this->duration;
-                if (!empty($this->timeremaining)) {
-                    $returnarr['timeremaining'] = $this->timeremaining;
-                }
-                return $returnarr;
-            } else {
-                return [];
+        if (!empty($this->selflearningcourse)) {
+            $returnarr['selflearningcourse'] = $this->selflearningcourse;
+            $returnarr['duration'] = $this->duration;
+            $returnarr['selflearningcourseshowdurationinfo'] = $this->selflearningcourseshowdurationinfo;
+            if (!empty($this->timeremaining)) {
+                $returnarr['timeremaining'] = $this->timeremaining;
             }
+            return $returnarr;
+        }
+
+        if (empty($this->datestrings)) {
+            return [];
         }
 
         $returnarr = [

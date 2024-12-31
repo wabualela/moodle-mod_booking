@@ -27,8 +27,11 @@ namespace mod_booking;
 
 use context_system;
 use dml_exception;
+use mod_booking\bo_availability\bo_info;
 use mod_booking\bo_availability\conditions\customform;
 use mod_booking\singleton_service;
+use stdClass;
+use Throwable;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -101,17 +104,6 @@ class booking_answers {
         $data = $cache->get($optionid);
 
         if (!$data) {
-            $params = ['optionid' => $optionid];
-
-            if ($CFG->version >= 2021051700) {
-                // This only works in Moodle 3.11 and later.
-                $userfields = \core_user\fields::for_name()->with_userpic()->get_sql('u')->selects;
-                $userfields = trim($userfields, ', ');
-            } else {
-                // This is only here to support Moodle versions earlier than 3.11.
-                $userfields = \user_picture::fields('u');
-            }
-
             // phpcs:ignore Squiz.PHP.CommentedOutCode.Found
             /* $sql = "SELECT ba.id as baid, ba.userid, ba.waitinglist, ba.timecreated, $userfields, u.institution
             FROM {booking_answers} ba
@@ -120,22 +112,7 @@ class booking_answers {
             AND u.deleted = 0
             ORDER BY ba.timecreated ASC"; */
 
-            $sql = "SELECT
-                ba.id as baid,
-                ba.userid as id,
-                ba.userid,
-                ba.waitinglist,
-                ba.completed,
-                ba.timemodified,
-                ba.optionid,
-                ba.timecreated,
-                ba.json,
-                ba.places
-            FROM {booking_answers} ba
-            WHERE ba.optionid = :optionid
-            AND ba.waitinglist < 5
-            ORDER BY ba.timemodified ASC";
-
+            [$sql, $params] = self::return_sql_to_get_answers($optionid);
             $answers = $DB->get_records_sql($sql, $params);
 
             // We don't want to query for empty bookings, so we also cache these.
@@ -353,6 +330,109 @@ class booking_answers {
     public function user_on_notificationlist(int $userid) {
 
         if (isset($this->userstonotify[$userid])) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * This function checks if the current instance of the booking option is overlapping with other bookings of this given user.
+     *
+     * @param int $userid
+     * @param bool $forbiddenbynewoption
+     *
+     * @return array
+     *
+     */
+    public function is_overlapping(int $userid, bool $forbiddenbynewoption = true): array {
+        if (!isloggedin() || isguestuser()) {
+            return [];
+        }
+        $overlappinganswers = [];
+
+        $settings = singleton_service::get_instance_of_booking_option_settings($this->optionid);
+        $myanswers = $this->get_all_answers_for_user_cached(
+            $userid,
+            0,
+            [
+                MOD_BOOKING_STATUSPARAM_BOOKED,
+                MOD_BOOKING_STATUSPARAM_WAITINGLIST,
+                MOD_BOOKING_STATUSPARAM_RESERVED,
+            ],
+            true
+        );
+
+        // If the user has no answers, then there is no overlap.
+        if (empty($myanswers)) {
+            return $overlappinganswers;
+        }
+
+        foreach ($myanswers as $answer) {
+            // Even if in this bookingoption, overlapping is not forbidden,...
+            // ...we have to check in the bookinganswers if it overlaps with other options where it is forbidden.
+
+            // First we check if there could be a general overlapping. Only where this can occure, we check sessions.
+            // If the courseendtime is smaller than the other coursestarttime we can skip.
+            // If the coursestarttime is bigger than the other courseendtime we can skip.
+            if (
+                (!$forbiddenbynewoption &&
+                (!isset($answer->nooverlappinghandling) ||
+                $answer->nooverlappinghandling == MOD_BOOKING_COND_OVERLAPPING_HANDLING_EMPTY)) ||
+                !self::check_overlap(
+                    $answer->coursestarttime,
+                    $answer->courseendtime,
+                    $settings->coursestarttime,
+                    $settings->courseendtime
+                )
+            ) {
+                continue;
+            }
+            $settingsanswers = singleton_service::get_instance_of_booking_option_settings($answer->optionid);
+            // If there are no sessions, we can return true right away.
+            if (
+                count($settings->sessions) < 2
+                && count($settingsanswers->sessions) < 2
+            ) {
+                $overlappinganswers[$answer->optionid] = $answer;
+                continue;
+            }
+            // Else, we need to check each session.
+            foreach ($settings->sessions as $session) {
+                foreach ($settingsanswers->sessions as $answersession) {
+                    if (
+                        self::check_overlap(
+                            $answersession->coursestarttime,
+                            $answersession->courseendtime,
+                            $session->coursestarttime,
+                            $session->courseendtime
+                        )
+                    ) {
+                        $overlappinganswers[$answer->optionid] = $answer;
+                        continue 2;
+                    }
+                }
+            }
+        }
+        return $overlappinganswers;
+    }
+
+    /**
+     * Checks overlapping of dates.
+     *
+     * @param mixed $starttime1
+     * @param mixed $endtime1
+     * @param mixed $starttime2
+     * @param mixed $endtime2
+     *
+     * @return bool
+     *
+     */
+    private static function check_overlap($starttime1, $endtime1, $starttime2, $endtime2): bool {
+        if (
+            ($starttime1 <= $endtime2 && $endtime1 >= $starttime2) ||
+            ($starttime1 == $starttime2) ||
+            ($endtime1 == $endtime2)
+        ) {
             return true;
         }
         return false;
@@ -624,5 +704,156 @@ class booking_answers {
         }, 0);
 
         return $sum;
+    }
+
+    /**
+     * This returns all answer records for a user.
+     * The request is cached and uses singleton pattern.
+     *
+     * @param int $userid
+     * @param int $cmid
+     * @param array $status
+     * @param bool $withcoursetimes
+     *
+     * @return array
+     *
+     */
+    private function get_all_answers_for_user_cached(
+        int $userid,
+        int $cmid = 0,
+        array $status = [
+            MOD_BOOKING_STATUSPARAM_BOOKED,
+            MOD_BOOKING_STATUSPARAM_WAITINGLIST,
+            MOD_BOOKING_STATUSPARAM_RESERVED,
+        ],
+        bool $withcoursetimes = false
+    ) {
+
+        global $DB, $CFG;
+
+        $answers = [];
+        $data = singleton_service::get_answers_for_user($userid);
+        if (isset($data['answers'])) {
+            $answers = $data['answers'];
+        }
+
+        try {
+            // If we don't have the answers in the singleton, we look in the cache.
+            if (empty($answers)) {
+                $cache = \cache::make('mod_booking', 'bookinganswers');
+                $data = $cache->get('myanswers');
+                $statustofetch = [];
+                $answers = [];
+                // We don't have any answers, we get the ones we need.
+                if (!$data) {
+                    [$sql, $params] = $this->return_sql_to_get_answers(0, $userid, $status, $withcoursetimes);
+
+                    $answers = $DB->get_records_sql($sql, $params);
+
+                    $data = [
+                        'status' => $status,
+                        'answers' => $answers,
+                    ];
+                } else {
+                    // We need to check if we have all the answers we currently want.
+                    // Therefore, we check in the cached object if there it covers the right status.
+
+                    foreach ($status as $bookingstatus) {
+                        if (!in_array($bookingstatus, $data['status'])) {
+                            $statustofetch[] = $bookingstatus;
+                        }
+                    }
+
+                    if (!empty($statustofetch)) {
+                        [$sql, $params] = $this->return_sql_to_get_answers(0, $userid, $statustofetch);
+                        $answers = $DB->get_records_sql($sql, $params);
+                    }
+
+                    $data['answers'] = array_merge($data['answers'], $answers ?? []);
+                    $data['status'] = array_merge($statustofetch, $data['status'] ?? []);
+                }
+
+                $answers = $data['answers'];
+                singleton_service::set_answers_for_user($userid, $data);
+                $cache->set('myanswers', $data);
+            }
+        } catch (Throwable $e) {
+            if ($CFG->debug = (E_ALL | E_STRICT)) {
+                throw $e;
+            }
+        }
+        return $answers;
+    }
+
+    /**
+     * This returns the sql to fetch all the answers. Might be restricted fo booking optinos or for users or none.
+     *
+     * @param int $optionid
+     * @param int $userid
+     * @param array $status
+     * @param bool $withcoursetimes
+     *
+     * @return array
+     *
+     */
+    private function return_sql_to_get_answers(
+        int $optionid = 0,
+        int $userid = 0,
+        array $status = [
+            MOD_BOOKING_STATUSPARAM_BOOKED,
+            MOD_BOOKING_STATUSPARAM_WAITINGLIST,
+            MOD_BOOKING_STATUSPARAM_RESERVED,
+            MOD_BOOKING_STATUSPARAM_NOTIFYMELIST,
+        ],
+        $withcoursetimes = false
+    ) {
+        global $DB;
+
+        [$inorequal, $params] = $DB->get_in_or_equal($status, SQL_PARAMS_NAMED);
+
+        $wherearray = [
+            " ba.waitinglist $inorequal ",
+        ];
+
+        if (!empty($optionid)) {
+            $params['optionid'] = $optionid;
+            $wherearray[] = ' ba.optionid = :optionid ';
+        }
+
+        if (!empty($userid)) {
+            $params['userid'] = $userid;
+            $wherearray[] = ' ba.userid = :userid ';
+        }
+
+        if ($withcoursetimes) {
+            $overlapping = bo_info::check_for_sqljson_key_in_array('bo.availability', 'nooverlappinghandling');
+            $withcoursestarttimesselect = " , bo.coursestarttime, bo.courseendtime, $overlapping as nooverlappinghandling";
+            $withcoursestarttimesjoin = " JOIN {booking_options} bo ON ba.optionid = bo.id ";
+            $wherearray[] = ' NOT (bo.json LIKE \'%"selflearningcourse":"1"%\' OR bo.json LIKE \'%"selflearningcourse":1%\')';
+        } else {
+            $withcoursestarttimesselect = "";
+            $withcoursestarttimesjoin = "";
+        }
+
+        $where = implode(' AND ', $wherearray);
+
+        $sql = "SELECT
+                ba.id as baid,
+                ba.userid as id,
+                ba.userid,
+                ba.waitinglist,
+                ba.completed,
+                ba.timemodified,
+                ba.optionid,
+                ba.timecreated,
+                ba.json,
+                ba.places
+                $withcoursestarttimesselect
+            FROM {booking_answers} ba
+            $withcoursestarttimesjoin
+            WHERE $where
+            ORDER BY ba.timemodified ASC";
+
+        return [$sql, $params];
     }
 }

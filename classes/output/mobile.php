@@ -215,24 +215,25 @@ class mobile {
         global $OUTPUT, $USER, $DB;
 
         $mybookings = $DB->get_records_sql(
-        "SELECT ba.id id, c.id courseid, c.fullname fullname, b.id bookingid, b.name, bo.text, bo.id optionid,
-        bo.coursestarttime coursestarttime, bo.courseendtime courseendtime, cm.id cmid
-        FROM
-        {booking_answers} ba
-        LEFT JOIN
-    {booking_options} bo ON ba.optionid = bo.id
-        LEFT JOIN
-    {booking} b ON b.id = bo.bookingid
-        LEFT JOIN
-    {course} c ON c.id = b.course
-        LEFT JOIN
-        {course_modules} cm ON cm.module = (SELECT
-                id
+            "SELECT ba.id id, c.id courseid, c.fullname fullname, b.id bookingid, b.name, bo.text, bo.id optionid,
+            bo.coursestarttime coursestarttime, bo.courseendtime courseendtime, cm.id cmid
             FROM
-                {modules}
-            WHERE
-                name = 'booking')
-            WHERE instance = b.id AND ba.userid = {$USER->id} AND cm.visible = 1");
+            {booking_answers} ba
+            LEFT JOIN
+        {booking_options} bo ON ba.optionid = bo.id
+            LEFT JOIN
+        {booking} b ON b.id = bo.bookingid
+            LEFT JOIN
+        {course} c ON c.id = b.course
+            LEFT JOIN
+            {course_modules} cm ON cm.module = (SELECT
+                    id
+                FROM
+                    {modules}
+                WHERE
+                    name = 'booking')
+                WHERE instance = b.id AND ba.userid = {$USER->id} AND cm.visible = 1"
+        );
 
         $outputdata = [];
 
@@ -278,24 +279,14 @@ class mobile {
         global $DB, $OUTPUT, $USER;
 
         $cmid = $args['cmid'];
+        $availablenavtabs = self::get_available_nav_tabs();
+        $whichview = self::set_active_nav_tabs($availablenavtabs, $args['whichview']);
 
         if (empty($cmid)) {
             throw new moodle_exception('nocmidselected', 'mod_booking');
         }
 
-        $booking = singleton_service::get_instance_of_booking_by_cmid($cmid);
-
-        $wherearray['bookingid'] = (int)$booking->id;
-
-        list($fields, $from, $where, $params, $filter) =
-                booking::get_options_filter_sql(0, 0, '', null, null, [], $wherearray);
-
-        $sql = "SELECT $fields
-                FROM $from
-                WHERE $where";
-
-        $records = $DB->get_records_sql($sql, $params);
-
+        $records = self::get_available_booking_options($whichview, $cmid);
         $outputdata = [];
         $pattern = '/<br\s*\/?>/i';
         $maxdatabeforecollapsable = get_config('booking', 'collapseshowsettings');
@@ -315,9 +306,11 @@ class mobile {
             $outputdata[] = $data;
         }
 
-        $data = [
-          'mybookings' => $outputdata,
-        ];
+        $data['availablenavtabs'] = $availablenavtabs;
+        $data['whichview'] = $whichview;
+        $data['cmid'] = $cmid;
+        $data['mybookings'] = $outputdata;
+        $data['timestamp'] = time();
         return [
             'templates' => [
                 [
@@ -327,6 +320,222 @@ class mobile {
             ],
             'javascript' => '',
             'otherdata' => ['data' => '{}'],
+        ];
+    }
+
+    /**
+     * Get all selected nav tabs from the config
+     * @param string $selectedview
+     * @param int $cmid
+     * @return array
+     */
+    public static function get_available_booking_options($selectedview, $cmid) {
+        global $DB;
+        $booking = singleton_service::get_instance_of_booking_by_cmid($cmid);
+        $params = [];
+        switch ($selectedview) {
+            case 'showactive':
+                $params = self::get_rendered_active_options_table($booking);
+                break;
+            case 'mybooking':
+                $params = self::get_rendered_my_booked_options_table($booking);
+                break;
+            case 'myoptions':
+                $params = self::get_rendered_table_for_teacher($booking);
+                break;
+            case 'myinstitution':
+                $params = self::get_rendered_myinstitution_table($booking);
+                break;
+            case 'showvisible':
+                $params = self::get_rendered_visible_options_table($booking);
+                break;
+            case 'showinvisible':
+                $params = self::get_rendered_invisible_options_table($booking);
+                break;
+            default:
+                $params = self::get_rendered_all_options_table($booking);
+                break;
+        }
+        list($fields, $from, $where, $params, $filter) = booking::get_options_filter_sql(
+            0,
+            0,
+            '',
+            null,
+            $booking->context,
+            [],
+            $params['wherearray'],
+            $userid ?? null,
+            $params['bookingparams'] ?? null,
+            $params['additionalwhere'] ?? null
+        );
+
+        if ($selectedview == 'showactive') {
+            $params['timenow'] = strtotime('today 00:00');
+        }
+
+        $sql = "SELECT $fields
+                FROM $from
+                WHERE $where";
+
+        $records = $DB->get_records_sql($sql, $params);
+        return $records;
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_invisible_options_table($booking): array {
+        $wherearray = [
+            'bookingid' => (int) $booking->id,
+            'invisible' => 1,
+        ];
+        return [
+            'wherearray' => $wherearray,
+        ];
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_visible_options_table($booking): array {
+        $wherearray = [
+            'bookingid' => (int) $booking->id,
+            'invisible' => 0,
+        ];
+        return [
+            'wherearray' => $wherearray,
+        ];
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_myinstitution_table($booking): array {
+        global $USER;
+        $wherearray = [
+            'bookingid' => (int)$booking->id,
+            'teacherobjects' => '%"id":' . $USER->institution . ',%',
+        ];
+        return [
+            'wherearray' => $wherearray,
+        ];
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_table_for_teacher($booking): array {
+        global $USER;
+        $wherearray = [
+            'bookingid' => (int)$booking->id,
+            'teacherobjects' => '%"id":' . $USER->id . ',%',
+        ];
+        return [
+            'wherearray' => $wherearray,
+        ];
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_active_options_table($booking): array {
+        $wherearray = ['bookingid' => (int)$booking->id];
+        $additionalwhere = '((courseendtime > :timenow OR courseendtime = 0) AND status = 0)';
+        return [
+            'wherearray' => $wherearray,
+            'additionalwhere' => $additionalwhere,
+            'bookingparams' => [MOD_BOOKING_STATUSPARAM_BOOKED],
+        ];
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_my_booked_options_table($booking): array {
+        global $DB, $USER;
+        $wherearray = ['bookingid' => (int)$booking->id];
+        return [
+            'wherearray' => $wherearray,
+            'userid' => $USER->id,
+        ];
+    }
+
+    /**
+     * Render table for all booking options.
+     * @param \mod_booking\booking $booking
+     * @return array
+     */
+    public static function get_rendered_all_options_table($booking): array {
+        global $DB;
+        $wherearray = ['bookingid' => (int)$booking->id];
+        return [
+            'wherearray' => $wherearray,
+        ];
+    }
+
+    /**
+     * Get all selected nav tabs from the config$activetab
+     * @return array
+     */
+    public static function get_available_nav_tabs() {
+        $selectednavlabelnames = [];
+        $navlabelnames = self::match_view_label_and_names();
+        $configmobileviewoptions = get_config('booking', 'mobileviewoptions');
+        if ($configmobileviewoptions !== '') {
+            $navtabs = explode(',', get_config('booking', 'mobileviewoptions'));
+            foreach ($navtabs as $navtab) {
+                $selectednavlabelnames[] = [
+                  'label' => $navtab,
+                  'name' => $navlabelnames[$navtab],
+                  'class' => $activetab === $navtab ? 'active' : false,
+                ];
+            }
+        }
+        return $selectednavlabelnames;
+    }
+
+    /**
+     * Get all selected nav tabs from the config$activetab
+     * @param array $tabs
+     * @param string $activetab
+     * @return string
+     */
+    public static function set_active_nav_tabs(&$tabs, $activetab) {
+        $whichview = $activetab ?? $tabs[0]['label'] ?? 'showall';
+        foreach ($tabs as &$tab) {
+            if ($tab['label'] == $whichview) {
+                $tab['class'] = 'active';
+                break;
+            }
+        }
+        return $whichview;
+    }
+
+    /**
+     * Config options my name
+     * @return array
+     */
+    public static function match_view_label_and_names() {
+        return [
+            'showall' => get_string('showallbookingoptions', 'booking'),
+            'mybooking' => get_string('showmybookingsonly', 'booking'),
+            'myoptions' => get_string('optionsiteach', 'booking'),
+            'showactive' => get_string('activebookingoptions', 'booking'),
+            'myinstitution' => get_string('myinstitution', 'booking'),
+            'showvisible' => get_string('visibleoptions', 'booking'),
+            'showinvisible' => get_string('invisibleoptions', 'booking'),
         ];
     }
 
